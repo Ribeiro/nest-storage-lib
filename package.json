@@ -1,0 +1,28 @@
+{
+  "name": "nest-storage-lib",
+  "version": "1.0.0",
+   "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
+    "test:coverage": "jest --coverage"
+  },
+  "keywords": [],
+  "description": "Storage Service to use with NestJS",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.832.0",
+    "@nestjs/common": "^11.1.3",
+    "dotenv": "^16.5.0"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.1.3",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.0.3",
+    "jest": "^30.0.2",
+    "ts-jest": "^29.4.0"
+  },
+  "author": "Geovanny Ribeiro",
+  "license": "MIT"
+}
