@@ -1,17 +1,20 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from "@nestjs/common";
 import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
   ListObjectsV2Command,
   DeleteObjectCommand,
-} from '@aws-sdk/client-s3';
-import { StorageService } from '../interfaces/storage-service.interface';
-import { Readable } from 'stream';
-import { UploadFileDto } from '../dtos/upload-file.dto';
-import { DownloadFileDto } from '../dtos/download-file.dto';
-import { DeleteFileDto } from '../dtos/delete-file.dto';
-import { ListFilesDto } from '../dtos/list-files.dto';
+} from "@aws-sdk/client-s3";
+import { StorageService } from "../interfaces/storage-service.interface";
+import { Readable } from "stream";
+import { UploadFileDto } from "../dtos/upload-file.dto";
+import { DownloadFileDto } from "../dtos/download-file.dto";
+import { DeleteFileDto } from "../dtos/delete-file.dto";
+import { ListFilesDto } from "../dtos/list-files.dto";
+import { GetSignedUrlDto } from "../dtos/get-signed-url.dto";
+import { getSignedUrl as generateSignedUrl } from '@aws-sdk/s3-request-presigner';
+
 
 @Injectable()
 export class S3StorageService implements StorageService {
@@ -33,21 +36,24 @@ export class S3StorageService implements StorageService {
 
     try {
       await Promise.all(
-        data.map(file =>
+        data.map((file) =>
           this.s3.send(
             new PutObjectCommand({
               Bucket: file.bucket,
               Key: file.key,
               Body: file.content,
-              ContentType: file.contentType || 'application/octet-stream',
-            }),
-          ),
-        ),
+              ContentType: file.contentType || "application/octet-stream",
+            })
+          )
+        )
       );
 
       this.logger.log(`Upload completed successfully.`);
     } catch (error) {
-      this.logger.error(`Failed to upload files to S3`, error instanceof Error ? error.stack : '');
+      this.logger.error(
+        `Failed to upload files to S3`,
+        error instanceof Error ? error.stack : ""
+      );
       throw error;
     }
   }
@@ -56,25 +62,30 @@ export class S3StorageService implements StorageService {
     this.logger.log(`Downloading ${data.length} file(s) from S3...`);
 
     try {
-      return await Promise.all(data.map(async (file) => {
-        const response = await this.s3.send(
-          new GetObjectCommand({
-            Bucket: file.bucket,
-            Key: file.key,
-          }),
-        );
+      return await Promise.all(
+        data.map(async (file) => {
+          const response = await this.s3.send(
+            new GetObjectCommand({
+              Bucket: file.bucket,
+              Key: file.key,
+            })
+          );
 
-        const stream = response.Body as Readable;
-        const chunks: Uint8Array[] = [];
+          const stream = response.Body as Readable;
+          const chunks: Uint8Array[] = [];
 
-        for await (const chunk of stream) {
-          chunks.push(chunk);
-        }
+          for await (const chunk of stream) {
+            chunks.push(chunk);
+          }
 
-        return Buffer.concat(chunks);
-      }));
+          return Buffer.concat(chunks);
+        })
+      );
     } catch (error) {
-      this.logger.error(`Failed to download files from S3`, error instanceof Error ? error.stack : '');
+      this.logger.error(
+        `Failed to download files from S3`,
+        error instanceof Error ? error.stack : ""
+      );
       throw error;
     }
   }
@@ -84,40 +95,76 @@ export class S3StorageService implements StorageService {
 
     try {
       await Promise.all(
-        data.map(file =>
+        data.map((file) =>
           this.s3.send(
             new DeleteObjectCommand({
               Bucket: file.bucket,
               Key: file.key,
-            }),
-          ),
-        ),
+            })
+          )
+        )
       );
 
       this.logger.log(`Deletion completed successfully.`);
     } catch (error) {
-      this.logger.error(`Failed to delete files from S3`, error instanceof Error ? error.stack : '');
+      this.logger.error(
+        `Failed to delete files from S3`,
+        error instanceof Error ? error.stack : ""
+      );
       throw error;
     }
   }
 
   async listFiles(data: ListFilesDto): Promise<string[]> {
-    this.logger.log(`Listing files from bucket "${data.bucket}" with prefix "${data.prefix || ''}"...`);
+    this.logger.log(
+      `Listing files from bucket "${data.bucket}" with prefix "${
+        data.prefix || ""
+      }"...`
+    );
 
     try {
       const response = await this.s3.send(
         new ListObjectsV2Command({
           Bucket: data.bucket,
-          Prefix: data.prefix || '',
-        }),
+          Prefix: data.prefix || "",
+        })
       );
 
-      const keys = response.Contents?.map(obj => obj.Key!) ?? [];
+      const keys = response.Contents?.map((obj) => obj.Key!) ?? [];
 
       this.logger.log(`Found ${keys.length} file(s).`);
       return keys;
     } catch (error) {
-      this.logger.error(`Failed to list files from S3`, error instanceof Error ? error.stack : '');
+      this.logger.error(
+        `Failed to list files from S3`,
+        error instanceof Error ? error.stack : ""
+      );
+      throw error;
+    }
+  }
+
+  async getSignedUrl(data: GetSignedUrlDto): Promise<string> {
+    this.logger.log(
+      `Generating signed URL for s3://${data.bucket}/${data.key}...`
+    );
+
+    try {
+      const command = new GetObjectCommand({
+        Bucket: data.bucket,
+        Key: data.key,
+      });
+
+      const url = await generateSignedUrl(this.s3, command, {
+        expiresIn: data.expiresIn ?? 3600, // default 1 hora
+      });
+
+      this.logger.log(`Signed URL generated successfully.`);
+      return url;
+    } catch (error) {
+      this.logger.error(
+        `Failed to generate signed URL`,
+        error instanceof Error ? error.stack : ""
+      );
       throw error;
     }
   }

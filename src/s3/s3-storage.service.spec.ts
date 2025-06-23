@@ -1,10 +1,4 @@
 import { S3StorageService } from "./s3-storage.service";
-import {
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectCommand,
-  ListObjectsV2Command,
-} from "@aws-sdk/client-s3";
 import { Logger } from "@nestjs/common";
 
 jest.mock("@aws-sdk/client-s3", () => {
@@ -17,6 +11,20 @@ jest.mock("@aws-sdk/client-s3", () => {
     ListObjectsV2Command: jest.fn().mockImplementation((input) => ({ input })),
   };
 });
+
+jest.mock('@aws-sdk/s3-request-presigner', () => {
+  return {
+    getSignedUrl: jest.fn(),
+  };
+});
+
+import { Readable } from "stream";
+function ReadableFromString(text: string): Readable {
+  const stream = new Readable();
+  stream.push(text);
+  stream.push(null);
+  return stream;
+}
 
 describe("S3StorageService", () => {
   let service: S3StorageService;
@@ -197,12 +205,55 @@ describe("S3StorageService", () => {
 
     expect(result).toEqual([]);
   });
-});
 
-import { Readable } from "stream";
-function ReadableFromString(text: string): Readable {
-  const stream = new Readable();
-  stream.push(text);
-  stream.push(null);
-  return stream;
-}
+  describe("getSignedUrl", () => {
+    it("should generate a signed URL successfully", async () => {
+      const fakeUrl = "https://signedurl";
+      // Obtenha o mock da função getSignedUrl
+      const { getSignedUrl: mockGetSignedUrl } = require("@aws-sdk/s3-request-presigner");
+      mockGetSignedUrl.mockResolvedValue(fakeUrl);
+
+      const dto = {
+        bucket: "test-bucket",
+        key: "file.txt",
+        expiresIn: 1800, // 30 minutos
+      };
+
+      const url = await service.getSignedUrl(dto);
+
+      expect(url).toEqual(fakeUrl);
+      // Verifica se a função getSignedUrl foi chamada corretamente
+      expect(mockGetSignedUrl).toHaveBeenCalledTimes(1);
+      // Primeiro parâmetro: instância do s3 utilizada no serviço
+      expect(mockGetSignedUrl.mock.calls[0][0]).toBe((service as any).s3);
+      // Segundo parâmetro: comando do GetObject criado com os parâmetros corretos
+      const commandArg = mockGetSignedUrl.mock.calls[0][1];
+      expect(commandArg.input.Bucket).toEqual(dto.bucket);
+      expect(commandArg.input.Key).toEqual(dto.key);
+      // Terceiro parâmetro: as opções, onde o expiresIn é passado
+      expect(mockGetSignedUrl.mock.calls[0][2]).toEqual({
+        expiresIn: dto.expiresIn,
+      });
+    });
+
+    it("should log error and throw when getSignedUrl fails", async () => {
+      const error = new Error("GetSignedUrl failed");
+      const { getSignedUrl: mockGetSignedUrl } = require("@aws-sdk/s3-request-presigner");
+      mockGetSignedUrl.mockRejectedValue(error);
+
+      const dto = {
+        bucket: "test-bucket",
+        key: "file.txt",
+        expiresIn: 1800,
+      };
+
+      const spy = jest.spyOn((service as any).logger, "error");
+
+      await expect(service.getSignedUrl(dto)).rejects.toThrow("GetSignedUrl failed");
+      expect(spy).toHaveBeenCalledWith(
+        expect.stringContaining("Failed to generate signed URL"),
+        expect.any(String)
+      );
+    });
+  });
+});
