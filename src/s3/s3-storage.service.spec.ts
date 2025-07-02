@@ -1,5 +1,5 @@
 import { S3StorageService } from "./s3-storage.service";
-import { Logger } from "@nestjs/common";
+import { ClassSerializerInterceptor, Logger } from "@nestjs/common";
 
 jest.mock("@aws-sdk/client-s3", () => {
   const actual = jest.requireActual("@aws-sdk/client-s3");
@@ -216,7 +216,7 @@ describe("S3StorageService", () => {
       const dto = {
         bucket: "test-bucket",
         key: "file.txt",
-        expiresIn: 1800, // 30 minutos
+        expiresInSeconds: 1800,ClassSerializerInterceptor
       };
 
       const url = await service.getSignedUrl(dto);
@@ -232,7 +232,7 @@ describe("S3StorageService", () => {
       expect(commandArg.input.Key).toEqual(dto.key);
       // Terceiro parâmetro: as opções, onde o expiresIn é passado
       expect(mockGetSignedUrl.mock.calls[0][2]).toEqual({
-        expiresIn: dto.expiresIn,
+        expiresIn: dto.expiresInSeconds,
       });
     });
 

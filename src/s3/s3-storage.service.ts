@@ -42,7 +42,7 @@ export class S3StorageService implements StorageService {
               Bucket: file.bucket,
               Key: file.key,
               Body: file.content,
-              ContentType: file.contentType || "application/octet-stream",
+              ContentType: file.contentType ?? "application/octet-stream",
             })
           )
         )
@@ -118,7 +118,7 @@ export class S3StorageService implements StorageService {
   async listFiles(data: ListFilesDto): Promise<string[]> {
     this.logger.log(
       `Listing files from bucket "${data.bucket}" with prefix "${
-        data.prefix || ""
+        data.prefix ?? ""
       }"...`
     );
 
@@ -126,7 +126,7 @@ export class S3StorageService implements StorageService {
       const response = await this.s3.send(
         new ListObjectsV2Command({
           Bucket: data.bucket,
-          Prefix: data.prefix || "",
+          Prefix: data.prefix ?? "",
         })
       );
 
@@ -155,7 +155,7 @@ export class S3StorageService implements StorageService {
       });
 
       const url = await generateSignedUrl(this.s3, command, {
-        expiresIn: data.expiresIn ?? 3600, // default 1 hora
+        expiresIn: data.expiresInSeconds ?? 3600,
       });
 
       this.logger.log(`Signed URL generated successfully.`);
